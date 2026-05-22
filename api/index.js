@@ -14,7 +14,7 @@ app.post('/api/callbackqris/:kataRahasia', (req, res) => {
         const kataRahasiaInput = req.params.kataRahasia;
         const data = req.body;
 
-        // 1. Validasi Kata Rahasia
+        // 1. Jika key tidak valid (Response 401)
         if (kataRahasiaInput !== "ambatukamahahaolerrrjsuf") {
             return res.status(401).send("401 Unauthorized");
         }
@@ -24,17 +24,17 @@ app.post('/api/callbackqris/:kataRahasia', (req, res) => {
             return res.status(400).send("Bad Request: Payload kosong");
         }
 
-        // 2. Validasi Username SMP (Sudah Aktif)
+        // 2. Jika username tidak valid (Response 4015200)
         if (data.us_username !== "dilzxxyz") {
             return res.json({ responseCode: "4015200", responseMessage: "Username invalid" });
         }
 
-        // 3. Validasi RRN biar gak dobel
+        // 3. Jika RRN sudah pernah diterima (Response 2005201)
         if (data.rrn && dbRRN.includes(data.rrn)) {
             return res.json({ responseCode: "2005201", responseMessage: "RRN already processed" });
         }
 
-        // 4. Ambil nominal
+        // 4. Ambil nominal dari amount.value
         const nominalMasuk = data.amount && data.amount.value ? parseFloat(data.amount.value) : 0;
         
         // Simpan ke database Vercel
@@ -43,10 +43,10 @@ app.post('/api/callbackqris/:kataRahasia', (req, res) => {
 
         console.log(`[+] TEMBAKAN SUKSES! Saldo masuk: Rp ${nominalMasuk}`);
 
-        // 5. Balas sukses ke SMP
+        // 5. Response Sukses (Response 2005200) - 100% sesuai teks dokumentasi
         return res.json({ 
             responseCode: "2005200", 
-            responseMessage: "Request has been processed" 
+            responseMessage: "Request has been processed successfully" 
         });
 
     } catch (error) {
