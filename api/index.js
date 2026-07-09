@@ -2,52 +2,51 @@ const express = require('express');
 const app = express();
 app.use(express.json());
 
-// Memori sementara buat status bayar
-let paidNominals = {}; 
-let dbRRN = [];
+// Memori sementara buat status bayar pakai Order ID
+let paidOrders = {}; 
 
 // =======================================================
-// JALUR 1: POST CALLBACK DARI SMP PAYMENT
+// JALUR 1: POST CALLBACK DARI PAKASIR
 // =======================================================
 app.post('/api/callbackqris/:kataRahasia', (req, res) => {
     try {
         const kataRahasiaInput = req.params.kataRahasia;
         const data = req.body;
 
-        // 1. Jika key tidak valid (Response 401)
+        // 1. Keamanan Endpoint
         if (kataRahasiaInput !== "ambatukamahahaolerrrjsuf") {
             return res.status(401).send("401 Unauthorized");
         }
 
-        // Kalau payload kosong/tidak valid
+        // Kalau payload kosong
         if (!data || Object.keys(data).length === 0) {
             return res.status(400).send("Bad Request: Payload kosong");
         }
 
-        // 2. Jika username tidak valid (Response 4015200)
-        if (data.us_username !== "dilzxxyz") {
-            return res.json({ responseCode: "4015200", responseMessage: "Username invalid" });
+        // 2. Validasi Proyek Pakasir
+        if (data.project !== "dilzxstrore") {
+            return res.status(403).json({ message: "Project invalid" });
         }
 
-        // 3. Jika RRN sudah pernah diterima (Response 2005201)
-        if (data.rrn && dbRRN.includes(data.rrn)) {
-            return res.json({ responseCode: "2005201", responseMessage: "RRN already processed" });
+        // 3. Validasi status pembayaran completed dari Pakasir
+        if (data.status !== "completed") {
+            return res.status(200).json({ message: "Status belum lunas, diabaikan" });
         }
 
-        // 4. Ambil nominal dari amount.value
-        const nominalMasuk = data.amount && data.amount.value ? parseFloat(data.amount.value) : 0;
+        // 4. Ambil order_id dari payload Pakasir
+        const orderIdMasuk = data.order_id;
         
-        // Simpan ke database Vercel
-        paidNominals[nominalMasuk] = true;
-        if (data.rrn) dbRRN.push(data.rrn);
+        if (!orderIdMasuk) {
+            return res.status(400).json({ message: "Order ID tidak ditemukan" });
+        }
 
-        console.log(`[+] TEMBAKAN SUKSES! Saldo masuk: Rp ${nominalMasuk}`);
+        // Simpan status LUNAS ke database Vercel berdasarkan Order ID
+        paidOrders[orderIdMasuk] = true;
 
-        // 5. Response Sukses (Response 2005200) - 100% sesuai teks dokumentasi
-        return res.json({ 
-            responseCode: "2005200", 
-            responseMessage: "Request has been processed successfully" 
-        });
+        console.log(`[+] TEMBAKAN SUKSES (PAKASIR)! Order ID: ${orderIdMasuk} LUNAS`);
+
+        // 5. Response Sukses
+        return res.status(200).json({ message: "Success" });
 
     } catch (error) {
         console.error("Crash di Webhook:", error);
@@ -56,14 +55,15 @@ app.post('/api/callbackqris/:kataRahasia', (req, res) => {
 });
 
 // =======================================================
-// JALUR 2: GET CEK STATUS DARI BOT LU
+// JALUR 2: GET CEK STATUS DARI BOT LU (PAKAI ID)
 // =======================================================
-app.get('/api/cekstatus/:nominal', (req, res) => {
+app.get('/api/cekstatus/:orderId', (req, res) => {
     try {
-        const nominal = parseFloat(req.params.nominal);
+        const orderId = req.params.orderId;
         
-        if (paidNominals[nominal]) {
-            delete paidNominals[nominal]; // Langsung hapus biar transaksi berikutnya gak error
+        // Cek apakah orderId tersebut ada di dalam memory yang sudah lunas
+        if (paidOrders[orderId]) {
+            delete paidOrders[orderId]; // Hapus biar gak dobel proses
             return res.json({ status: "LUNAS" });
         } else {
             return res.json({ status: "PENDING" });
@@ -73,5 +73,4 @@ app.get('/api/cekstatus/:nominal', (req, res) => {
     }
 });
 
-// Wajib ekspor module untuk Vercel
 module.exports = app;
